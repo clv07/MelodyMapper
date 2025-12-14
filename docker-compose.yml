@@ -1,0 +1,107 @@
+################################################################################
+# Filename: docker-compose.merged.yml
+# Purpose : Unified Docker Compose configuration for development, base, and production
+# Original Authors : Benjamin Goh 
+# Collaborater (Merging): Livia Chandra
+# 
+# Description:
+# This Docker Compose file consolidates the functionality of:
+#   - base configuration
+#   - local development
+#   - production deployment
+#
+# Usage:
+# - Development: run `docker-compose -f docker-compose.merged.yml --profile dev up`
+# - Production:  run `docker-compose -f docker-compose.merged.yml --profile prod up -d`
+#
+# Notes:
+# - Uses Docker Compose profiles to switch between dev and prod behaviors.
+# - Base services (nginx, frontend, backend, db) are always included.
+# - Dev profile enables hot-reloading, phpMyAdmin, and dev env vars.
+# - Prod profile enables production-ready env vars, nginx port 80, and persistent db volumes.
+################################################################################
+
+version: "3.8"
+
+services:
+  # NGINX reverse proxy (base + prod)
+  nginx:
+    build: ./nginx
+    ports:
+      - "8080:80"   # default (base)
+    depends_on:
+      - frontend
+      - backend
+      - db
+    profiles: ["base"]
+  
+  # Override NGINX for production profile
+  nginx_prod:
+    build: ./nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - backend
+      - db
+    profiles: ["prod"]
+
+  frontend:
+    build: ./client
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=http://cs506-team-05.cs.wisc.edu
+    profiles: ["base", "prod"]
+
+  frontend_dev:
+    build: ./client
+    volumes:
+      - ./client:/app
+      - node_modules:/app/node_modules
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:8080
+    ports:
+      - "3000:3000"
+    profiles: ["dev"]
+
+  backend:
+    build: ./server
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=mysql+mysqlconnector://root:my_root_password@db/mp_database
+    profiles: ["base", "prod"]
+
+  backend_dev:
+    build: ./server
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=mysql+mysqlconnector://root:my_root_password@db/mp_database
+    ports:
+      - "5000:5000"
+    profiles: ["dev"]
+
+  db:
+    build: ./database
+    environment:
+      MYSQL_ROOT_PASSWORD: my_root_password
+      MYSQL_DATABASE: mp_database
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: unless-stopped
+    profiles: ["base", "prod"]
+
+  dbPhpMyAdmin:
+    image: phpmyadmin/phpmyadmin:latest
+    environment:
+      PMA_HOST: db
+      PMA_USER: root
+      PMA_PASSWORD: my_root_password
+    ports:
+      - "8765:80"
+    profiles: ["dev"]
+
+volumes:
+  db_data:
+  node_modules:
+  
